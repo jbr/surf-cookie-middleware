@@ -1,0 +1,16 @@
+[package]
+name = "surf-cookie-middleware"
+version = "0.1.0"
+authors = ["Jacob Rothstein <hi@jbr.me>"]
+edition = "2018"
+
+[dependencies]
+surf = { version = "2.0.0", default-features = false }
+async-lock = "2.3.0"
+cookie_store = { version = "0.12.0", features = ["preserve_order"] }
+log = "0.4.11"
+
+[dev-dependencies]
+async-std = { version = "1.6", features = ["attributes"] }
+tide = { version = "0.14.0", default-features = false }
+tide-testing = "0.1.1"
