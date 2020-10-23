@@ -3,6 +3,11 @@ name = "surf-cookie-middleware"
 version = "0.1.0"
 authors = ["Jacob Rothstein <hi@jbr.me>"]
 edition = "2018"
+description = "surf cookie middleware, does what it says on the tin"
+keywords = ["surf", "cookies", "middleware"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/jbr/surf-cookie-middleware"
 
 [dependencies]
 surf = { version = "2.0.0", default-features = false }
