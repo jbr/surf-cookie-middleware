@@ -7,11 +7,13 @@
 )]
 
 use async_lock::RwLock;
-use cookie_store::CookieStore;
 use std::sync::Arc;
 use surf::http::headers::{COOKIE, SET_COOKIE};
 use surf::middleware::{Middleware, Next};
 use surf::{Client, Request, Response, Result, Url};
+
+pub use cookie_store;
+pub use cookie_store::CookieStore;
 
 #[derive(Default, Clone, Debug)]
 pub struct CookieMiddleware {
@@ -30,17 +32,47 @@ impl Middleware for CookieMiddleware {
 }
 
 impl CookieMiddleware {
+    /// Builds a new CookieMiddleware
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use surf::Client;
+    /// use surf_cookie_middleware::CookieMiddleware;
+    /// let client = Client::new().with(CookieMiddleware::new());
+    /// // client.get(...).await?;
+    /// // client.get(...).await?; <- this request will send any appropriate
+    /// //                            cookies received from the first request,
+    /// //                            based on request url
+    /// ```
+
     pub fn new() -> Self {
         Self::with_cookie_store(Default::default())
     }
 
+    /// Builds a CookieMiddleware with an existing [`cookie_store::CookieStore`]
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use surf::Client;
+    /// use surf_cookie_middleware::{CookieStore, CookieMiddleware};
+    /// let cookie_store = CookieStore::default();
+    /// let client = Client::new()
+    ///     .with(CookieMiddleware::with_cookie_store(cookie_store));
+    ///
+    /// // client.get(...).await?;
+    /// // client.get(...).await?; <- this request will send any appropriate
+    /// //                            cookies received from the first request,
+    /// //                            based on request url
+    /// ```
     pub fn with_cookie_store(cookie_store: CookieStore) -> Self {
         Self {
             cookie_store: Arc::new(RwLock::new(cookie_store)),
         }
     }
 
-    pub async fn set_cookies(&self, req: &mut Request) {
+    async fn set_cookies(&self, req: &mut Request) {
         let cookie_store = self.cookie_store.read().await;
         let mut matches = cookie_store.matches(req.url());
 
@@ -56,7 +88,7 @@ impl CookieMiddleware {
         req.insert_header(COOKIE, values);
     }
 
-    pub async fn store_cookies(&self, request_url: &Url, res: &Response) {
+    async fn store_cookies(&self, request_url: &Url, res: &Response) {
         if let Some(set_cookies) = res.header(SET_COOKIE) {
             let mut cookie_store = self.cookie_store.write().await;
             for cookie in set_cookies {
