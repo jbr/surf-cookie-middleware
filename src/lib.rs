@@ -1,3 +1,11 @@
+#![forbid(unsafe_code, future_incompatible)]
+#![deny(
+    missing_debug_implementations,
+    nonstandard_style,
+    missing_copy_implementations,
+    unused_qualifications
+)]
+
 use async_lock::RwLock;
 use cookie_store::CookieStore;
 use std::sync::Arc;
@@ -5,7 +13,7 @@ use surf::http::headers::{COOKIE, SET_COOKIE};
 use surf::middleware::{Middleware, Next};
 use surf::{Client, Request, Response, Result, Url};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct CookieMiddleware {
     cookie_store: Arc<RwLock<CookieStore>>,
 }
