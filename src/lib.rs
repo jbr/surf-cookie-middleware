@@ -1,14 +1,20 @@
 #![forbid(unsafe_code, future_incompatible)]
 #![deny(
+    missing_docs,
     missing_debug_implementations,
     nonstandard_style,
     missing_copy_implementations,
     unused_qualifications
 )]
 
+//! # A middleware for sending received cookies in surf
+//!
+//! see [`CookieMiddleware`] for details
+//!
 use async_dup::{Arc, Mutex};
-use async_lock::RwLock;
+use async_std::fs::{File, OpenOptions};
 use async_std::prelude::*;
+use async_std::sync::RwLock;
 use std::convert::TryInto;
 use std::io::Cursor;
 use surf::http::headers::{COOKIE, SET_COOKIE};
@@ -18,10 +24,35 @@ use surf::{Client, Request, Response, Result, Url};
 pub use cookie_store;
 pub use cookie_store::CookieStore;
 
+/// # A middleware for sending received cookies in surf
+///
+/// ## File system persistence
+///
+/// This middleware can optionally be constructed with a file or path
+/// to enable writing "persistent cookies" to disk after every
+/// received response.
+///
+/// ## Cloning semantics
+///
+/// All clones of this middleware will refer to the same data and fd
+/// (if persistence is enabled).
+///
+/// # Usage example
+///
+/// ```rust
+/// use surf::Client;
+/// use surf_cookie_middleware::CookieMiddleware;
+/// let client = Client::new().with(CookieMiddleware::new());
+/// // client.get(...).await?;
+/// // client.get(...).await?; <- this request will send any appropriate
+/// //                            cookies received from the first request,
+/// //                            based on request url
+/// ```
+
 #[derive(Default, Clone, Debug)]
 pub struct CookieMiddleware {
     cookie_store: Arc<RwLock<CookieStore>>,
-    file: Option<Arc<Mutex<async_std::fs::File>>>,
+    file: Option<Arc<Mutex<File>>>,
 }
 
 #[surf::utils::async_trait]
@@ -41,15 +72,15 @@ impl CookieMiddleware {
     /// # Example
     ///
     /// ```rust
-    /// use surf::Client;
     /// use surf_cookie_middleware::CookieMiddleware;
-    /// let client = Client::new().with(CookieMiddleware::new());
+    ///
+    /// let client = surf::Client::new().with(CookieMiddleware::new());
+    ///
     /// // client.get(...).await?;
     /// // client.get(...).await?; <- this request will send any appropriate
     /// //                            cookies received from the first request,
     /// //                            based on request url
     /// ```
-
     pub fn new() -> Self {
         Self::with_cookie_store(Default::default())
     }
@@ -59,16 +90,11 @@ impl CookieMiddleware {
     /// # Example
     ///
     /// ```rust
-    /// use surf::Client;
     /// use surf_cookie_middleware::{CookieStore, CookieMiddleware};
-    /// let cookie_store = CookieStore::default();
-    /// let client = Client::new()
-    ///     .with(CookieMiddleware::with_cookie_store(cookie_store));
     ///
-    /// // client.get(...).await?;
-    /// // client.get(...).await?; <- this request will send any appropriate
-    /// //                            cookies received from the first request,
-    /// //                            based on request url
+    /// let cookie_store = CookieStore::default();
+    /// let client = surf::Client::new()
+    ///     .with(CookieMiddleware::with_cookie_store(cookie_store));
     /// ```
     pub fn with_cookie_store(cookie_store: CookieStore) -> Self {
         Self {
@@ -77,22 +103,74 @@ impl CookieMiddleware {
         }
     }
 
+    /// Builds a CookieMiddleware from a path to a filesystem cookie
+    /// jar. These jars are stored in [ndjson](http://ndjson.org/)
+    /// format. If the file does not exist, it will be created. If the
+    /// file does exist, the cookie jar will be initialized with those
+    /// cookies.
+    ///
+    /// Currently this only persists "persistent cookies" -- cookies
+    /// with an expiry. "Session cookies" (without an expiry) are not
+    /// persisted to disk, nor are expired cookies.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
+    /// use surf_cookie_middleware::{CookieStore, CookieMiddleware};
+    ///
+    /// let cookie_store = CookieStore::default();
+    /// let client = surf::Client::new()
+    ///     .with(CookieMiddleware::from_path("./cookies.ndjson").await?);
+    /// # Ok(()) }) }
+    /// ```
     pub async fn from_path(path: impl Into<std::path::PathBuf>) -> std::io::Result<Self> {
         let path = path.into();
-        let mut file = async_std::fs::OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(&path)
             .await?;
 
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).await?;
-        let cookie_store = CookieStore::load_json(Cursor::new(&buf[..])).unwrap_or_default();
+        Self::from_file(file).await
+    }
 
+    async fn load_from_file(file: &mut File) -> Option<CookieStore> {
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).await.ok();
+        CookieStore::load_json(Cursor::new(&buf[..])).ok()
+    }
+
+    /// Builds a CookieMiddleware from a File (either
+    /// [`async_std::fs::File`] or [`std::fs::File`]) that represents
+    /// a filesystem cookie jar. These jars are stored in
+    /// [ndjson](http://ndjson.org/) format. The cookie jar will be
+    /// initialized with any cookies contained in this file, and
+    /// persisted to the file after every request.
+    ///
+    /// Currently this only persists "persistent cookies" -- cookies
+    /// with an expiry. "Session cookies" (without an expiry) are not
+    /// persisted to disk, nor are expired cookies.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
+    /// use surf::Client;
+    /// use surf_cookie_middleware::{CookieStore, CookieMiddleware};
+    /// let cookie_store = CookieStore::default();
+    /// let file = std::fs::File::create("./cookies.ndjson")?;
+    /// let client = Client::new()
+    ///     .with(CookieMiddleware::from_file(file).await?);
+    /// # Ok(()) }) }
+    /// ```
+    pub async fn from_file(file: impl Into<File>) -> std::io::Result<Self> {
+        let mut file = file.into();
+        let cookie_store = Self::load_from_file(&mut file).await;
         Ok(Self {
             file: Some(Arc::new(Mutex::new(file))),
-            cookie_store: Arc::new(RwLock::new(cookie_store)),
+            cookie_store: Arc::new(RwLock::new(cookie_store.unwrap_or_default())),
         })
     }
 
