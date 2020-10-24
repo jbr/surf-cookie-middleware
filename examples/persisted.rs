@@ -4,13 +4,15 @@ use surf_cookie_middleware::CookieMiddleware;
 
 #[async_std::main]
 async fn main() -> surf::Result<()> {
-    let client = Client::new().with(CookieMiddleware::new());
-
-    client
-        .get("https://httpbin.org/cookies/set/USER_ID/10")
+    Client::new()
+        .with(CookieMiddleware::from_path("./example.ndjson").await?)
+        .get("https://httpbin.org/response-headers?Set-Cookie=USER_ID=10;+Max-Age=1000")
         .await?;
 
-    let cookies: Value = client
+    // no data shared in memory between the requests
+
+    let cookies: Value = Client::new()
+        .with(CookieMiddleware::from_path("./example.ndjson").await?)
         .get("https://httpbin.org/cookies")
         .recv_json()
         .await?;
