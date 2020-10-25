@@ -17,6 +17,7 @@ use async_std::prelude::*;
 use async_std::sync::RwLock;
 use std::convert::TryInto;
 use std::io::Cursor;
+use std::io::SeekFrom;
 use surf::http::headers::{COOKIE, SET_COOKIE};
 use surf::middleware::{Middleware, Next};
 use surf::{Client, Request, Response, Result, Url};
@@ -186,9 +187,10 @@ impl CookieMiddleware {
                 .unwrap();
 
             let mut file = file.lock();
-            file.seek(std::io::SeekFrom::Start(0)).await?;
+            file.seek(SeekFrom::Start(0)).await?;
             file.write_all(&string[..]).await?;
             file.set_len(string.len().try_into()?).await?;
+            file.sync_all().await?;
         }
         Ok(())
     }
