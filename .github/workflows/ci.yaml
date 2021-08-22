@@ -5,6 +5,10 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  schedule:
+    # Runs at 05:05 UTC on the 5th of every month.
+    - cron:  '5 5 5 * *'
 
 env:
   RUSTFLAGS: -Dwarnings
