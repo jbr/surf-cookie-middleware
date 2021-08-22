@@ -10,32 +10,32 @@ readme = "README.md"
 repository = "https://github.com/jbr/surf-cookie-middleware"
 
 [dependencies]
-log = "0.4.11"
-async-std = "1.6"
-serde_json = "1.0.59"
-async-dup = "1.2.2"
-tempfile = "3.1.0"
+log = "0.4"
+async-std = "1.9"
+serde_json = "1.0"
+async-dup = "1.2"
+tempfile = "3.2"
 
 [dependencies.surf]
-version = "2.0"
+version = "2.1"
 default-features = false
 
 [dependencies.cookie_store]
-version = "0.12"
+version = "0.15"
 features = ["preserve_order"]
 
 [dev-dependencies]
 tide-testing = "0.1"
-serde_json = "1.0.59"
+serde_json = "1.0"
 
 [dev-dependencies.async-std]
-version = "1.6"
+version = "1.9"
 features = ["attributes"]
 
 [dev-dependencies.tide]
-version = "0.14"
+version = "0.16"
 default-features = false
 
 [dev-dependencies.surf]
-version = "2.0.0"
+version = "2.1"
 default-features = true

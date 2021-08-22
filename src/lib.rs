@@ -215,7 +215,7 @@ impl CookieMiddleware {
         if let Some(set_cookies) = res.header(SET_COOKIE) {
             let mut cookie_store = self.cookie_store.write().await;
             for cookie in set_cookies {
-                match cookie_store.parse(cookie.as_str(), &request_url) {
+                match cookie_store.parse(cookie.as_str(), request_url) {
                     Ok(action) => log::trace!("cookie action: {:?}", action),
                     Err(e) => log::trace!("cookie parse error: {:?}", e),
                 }
