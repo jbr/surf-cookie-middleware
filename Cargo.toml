@@ -35,6 +35,7 @@ features = ["attributes"]
 [dev-dependencies.tide]
 version = "0.16.0"
 default-features = false
+features = ["cookies"]
 
 [dev-dependencies.surf]
 version = "2.3.1"
