@@ -12,15 +12,22 @@
 //! see [`CookieMiddleware`] for details
 //!
 use async_dup::{Arc, Mutex};
-use async_std::fs::{File, OpenOptions};
-use async_std::prelude::*;
-use async_std::sync::RwLock;
-use std::convert::TryInto;
-use std::io::Cursor;
-use std::io::SeekFrom;
-use surf::http::headers::{COOKIE, SET_COOKIE};
-use surf::middleware::{Middleware, Next};
-use surf::{Client, Request, Response, Result, Url};
+use async_std::{
+    fs::{File, OpenOptions},
+    prelude::*,
+    sync::RwLock,
+};
+use std::{
+    convert::TryInto,
+    io::{self, Cursor, SeekFrom},
+    path::PathBuf,
+};
+use surf::{
+    http::headers::{COOKIE, SET_COOKIE},
+    middleware::{Middleware, Next},
+    utils::async_trait,
+    Client, Request, Response, Result, Url,
+};
 
 pub use cookie_store;
 pub use cookie_store::CookieStore;
@@ -56,7 +63,7 @@ pub struct CookieMiddleware {
     file: Option<Arc<Mutex<File>>>,
 }
 
-#[surf::utils::async_trait]
+#[async_trait]
 impl Middleware for CookieMiddleware {
     async fn handle(&self, mut req: Request, client: Client, next: Next<'_>) -> Result<Response> {
         let url = req.url().clone();
@@ -125,7 +132,7 @@ impl CookieMiddleware {
     ///     .with(CookieMiddleware::from_path("./cookies.ndjson").await?);
     /// # Ok(()) }) }
     /// ```
-    pub async fn from_path(path: impl Into<std::path::PathBuf>) -> std::io::Result<Self> {
+    pub async fn from_path(path: impl Into<PathBuf>) -> io::Result<Self> {
         let path = path.into();
         let file = OpenOptions::new()
             .create(true)
@@ -166,7 +173,7 @@ impl CookieMiddleware {
     ///     .with(CookieMiddleware::from_file(file).await?);
     /// # Ok(()) }) }
     /// ```
-    pub async fn from_file(file: impl Into<File>) -> std::io::Result<Self> {
+    pub async fn from_file(file: impl Into<File>) -> io::Result<Self> {
         let mut file = file.into();
         let cookie_store = Self::load_from_file(&mut file).await;
         Ok(Self {
@@ -178,7 +185,7 @@ impl CookieMiddleware {
     async fn save(&self) -> Result<()> {
         if let Some(ref file) = self.file {
             let mut string: Vec<u8> = vec![0];
-            let mut cursor = std::io::Cursor::new(&mut string);
+            let mut cursor = Cursor::new(&mut string);
 
             self.cookie_store
                 .read()
@@ -215,7 +222,7 @@ impl CookieMiddleware {
         if let Some(set_cookies) = res.header(SET_COOKIE) {
             let mut cookie_store = self.cookie_store.write().await;
             for cookie in set_cookies {
-                match cookie_store.parse(cookie.as_str(), &request_url) {
+                match cookie_store.parse(cookie.as_str(), request_url) {
                     Ok(action) => log::trace!("cookie action: {:?}", action),
                     Err(e) => log::trace!("cookie parse error: {:?}", e),
                 }
